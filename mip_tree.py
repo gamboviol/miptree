@@ -85,6 +85,9 @@ class MIPTree(object):
 
         query  the query vector
         k      number of best matches to return
+
+        Returns the matches found as a list of pairs (index into S, inner product),
+        and the number of vectors for which the inner product had to be computed.
         """
         q = Query(query,k)
         self.search(q,self.root)
@@ -169,7 +172,7 @@ if __name__ == '__main__':
         nn,scanned = t.match(q,3)
         pr.append(float(scanned)/len(X))
 
-        if i%1000 == 0: # check some cases for correctness
+        if i%100 == 0: # check some cases for correctness
             tree = X[[j for j,_ in nn]]
             brute_force = sorted([(x,x.dot(q)) for x in X],key=itemgetter(1),reverse=True)[:3]
             for tt,bb in zip(tree,[x for x,_ in brute_force]):
