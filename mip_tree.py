@@ -44,15 +44,32 @@ class Node(object):
             self.left.set_ordering(index_map)
             self.right.set_ordering(index_map)
 
+    def scan(self,vecs,q):
+        """compute dot products for all the vectors
+           indexed by this node"""
+        d = [(ix,q.dot(vecs[ix])) for ix in self.S]
+        return d
+
 class Query(object):
 
     def __init__(self,q,k):
         self.q = q
+        self.norm = sum(q**2)**0.5
         self.l = -np.inf
         self.k = k
         self.nn = []
         self.scanned = 0
 
+    def dot(self,v):
+        return self.q.dot(v)
+
+    def update(self,d):
+        self.scanned += len(d)
+        self.nn.extend(d)
+        self.nn.sort(key=itemgetter(1),reverse=True)
+        self.nn = self.nn[:self.k]
+        self.l = self.nn[-1][1]             
+    
 class MIPTree(object):
     """Maximum Inner Product Ball Tree"""
 
@@ -100,25 +117,27 @@ class MIPTree(object):
     def make_split(self,S):
         x = random.choice(S)
         A = S[np.argmax(d2(S,x))]
-        B = S[np.argmax(d2(S,A))]
-        return A,B
+        d2A = d2(S,A)
+        B = S[np.argmax(d2A)]
+        dd = d2A - d2(S,B)
+        return A,B,dd
 
     def build(self,S,node):
         if len(node.S) > self.N0:
-            A,B = self.make_split(S[node.S])
-            dd = d2(S[node.S],A) - d2(S[node.S],B)
+            A,B,dd = self.make_split(S[node.S])
             node.left = Node(S,node.S[dd<=0])
             node.right = Node(S,node.S[dd>0])
             self.build(S,node.left)
             self.build(S,node.right)
 
     def mip(self,q,node):
-        return q.q.dot(node.mu) + sum(q.q**2)**0.5*node.R
+        return q.dot(node.mu) + q.norm*node.R
 
     def search(self,q,node):
         if q.l < self.mip(q,node):
             if node.left is None and node.right is None:
-                self.scan(q,node)
+                d = node.scan(self.S,q)
+                q.update(d)
             else:
                 left = self.mip(q,node.left)
                 right = self.mip(q,node.right)
@@ -132,14 +151,6 @@ class MIPTree(object):
                         if q.l < right:
                             self.search(q,node.right)
 
-    def scan(self,q,node):
-        d = [(x,q.q.dot(self.S[x])) for x in node.S]
-        q.scanned += len(d)
-        q.nn.extend(d)
-        q.nn.sort(key=itemgetter(1),reverse=True)
-        q.nn = q.nn[:q.k]
-        q.l = q.nn[-1][1]                
-    
     def get_ordering(self):
         indices = []
         self.root.get_ordering(indices)
@@ -148,13 +159,13 @@ class MIPTree(object):
     def set_ordering(self,index_map):
         self.root.set_ordering(index_map)
 
-if __name__ == '__main__':
+def main():
 
     import numpy as np
     from operator import itemgetter
 
     d = 5
-    n = 100000
+    n = 10000
     X = np.random.randint(1,1000,(n,d))
 
     print 'building tree...'
@@ -180,3 +191,7 @@ if __name__ == '__main__':
                     raise RuntimeError(' '.join(map(str,(tt,bb,tt.dot(q),bb.dot(q)))))
 
     print 'scanned',np.mean(pr)
+
+if __name__ == '__main__':
+
+    main()
